@@ -50,7 +50,6 @@ This mod redesigns those rewards into meaningful permanent progression unlocks w
 # Technical Notes
 
 * Built for MelonLoader 0.7+
-* IL2CPP compatible
 * Runtime `ItemWeight` patching
 * Save-scoped progression system
 * Optimized inventory caching to avoid FPS loss
