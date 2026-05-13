@@ -17,14 +17,7 @@ Once obtained, the holster is consumed permanently and grants:
 * Functions as a permanent passive perk
 * No equip slot required anymore
 
-### Supported Rifles
 
-* Hunting Rifle
-* Vaughn's Rifle
-* Barb's Rifle
-* Curator's Rifle
-* Bunker Rifle
-* Antique Rifle variants
 
 ---
 
@@ -36,19 +29,6 @@ Once obtained, the belt is consumed permanently and grants:
 * Dynamically recalculates whenever inventory changes
 * No equip slot required anymore
 
-### Supported Tools
-
-* Heavy Hammer
-* Hatchet
-* Improvised Hatchet
-* Hacksaw
-* Prybar
-* Simple Tools
-* Quality Tools
-* Hunting Knife
-* Survival Knife
-* Improvised Knife
-* Cougar Claw Knife
 
 ---
 
