@@ -1,6 +1,6 @@
-PermanentQuestRewards
+**PermanentQuestRewards**
 
-A lightweight gameplay overhaul mod for The Long Dark that transforms late-game quest rewards into true permanent progression rewards — similar to the Technical Backpack.
+__A lightweight gameplay overhaul mod for The Long Dark that transforms late-game quest rewards into true permanent progression rewards — similar to the Technical Backpack.__
 
 Instead of occupying valuable clothing/accessory slots forever, special quest items now unlock passive account-per-save bonuses permanently after being found once.
 
