@@ -310,17 +310,11 @@ namespace PermanentQuestRewards
         public override void OnInitializeMelon()
         {
             MelonLogger.Msg("[PQR] PermanentQuestRewards v1.6.1 geladen");
-            MelonLogger.Msg("[PQR] Debug: F8 drücken, um Status in die Melon-Konsole zu schreiben.");
+            MelonLogger.Msg("[PQR] Debug wird beim Freischalten automatisch in die Melon-Konsole geschrieben.");
 
             PrintStartMessage();
 
             PQR_RuntimePatcher.PatchWeightMethods(HarmonyInstance);
-        }
-
-        public override void OnUpdate()
-        {
-            if (InputManager.GetKeyDown(null, KeyCode.F8))
-                PQR_Debug.DumpStatus("Manueller Debug-Dump");
         }
 
         private static void PrintStartMessage()
@@ -380,17 +374,52 @@ namespace PermanentQuestRewards
 
             return name.Replace("(Clone)", "").Trim();
         }
+
+        public static string GetRuntimeInstanceKey(GearItem gear)
+        {
+            if (gear == null)
+                return "";
+
+            try
+            {
+                if (gear.Pointer != IntPtr.Zero)
+                    return "ptr:" + gear.Pointer.ToInt64();
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                return "hash:" + gear.GetHashCode();
+            }
+            catch
+            {
+            }
+
+            return "";
+        }
     }
 
     public static class PQR_WeightLogic
     {
-        private static float nextAllowedScanTime = 0f;
+        private static float nextPresenceCacheClearTime = 0f;
+        private static float nextSelectionResetTime = 0f;
+
         private static readonly Dictionary<string, bool> inventoryPresenceCache = new Dictionary<string, bool>();
+
+        private static readonly HashSet<string> selectedRifleInstanceKeys = new HashSet<string>();
+        private static readonly HashSet<string> selectedToolInstanceKeys = new HashSet<string>();
+        private static readonly Dictionary<string, int> selectedToolTypeCounts = new Dictionary<string, int>();
 
         public static void ForceRefreshCache()
         {
-            nextAllowedScanTime = 0f;
+            nextPresenceCacheClearTime = 0f;
+            nextSelectionResetTime = 0f;
             inventoryPresenceCache.Clear();
+            selectedRifleInstanceKeys.Clear();
+            selectedToolInstanceKeys.Clear();
+            selectedToolTypeCounts.Clear();
         }
 
         public static bool ShouldReduce(GearItem gear)
@@ -404,12 +433,84 @@ namespace PermanentQuestRewards
             string gearName = PQR_Util.NormalizeGearName(gear.name);
 
             if (PermanentFlags.HasRifleHolster && KnownWeights.RIFLES.Contains(gearName))
-                return IsCurrentHeaviestRifle(gearName);
+                return ShouldReduceRifle(gear, gearName);
 
             if (PermanentFlags.HasToolBelt && KnownWeights.TOOLS.Contains(gearName))
-                return IsCurrentTopThreeTool(gearName);
+                return ShouldReduceTool(gear, gearName);
 
             return false;
+        }
+
+        private static void ResetSelectionWindowIfNeeded()
+        {
+            if (Time.time < nextSelectionResetTime)
+                return;
+
+            nextSelectionResetTime = Time.time + 0.25f;
+            selectedRifleInstanceKeys.Clear();
+            selectedToolInstanceKeys.Clear();
+            selectedToolTypeCounts.Clear();
+        }
+
+        private static bool ShouldReduceRifle(GearItem gear, string gearName)
+        {
+            string targetType = GetCurrentHeaviestRifleName();
+
+            if (string.IsNullOrEmpty(targetType))
+                return false;
+
+            if (targetType != gearName)
+                return false;
+
+            ResetSelectionWindowIfNeeded();
+
+            string key = PQR_Util.GetRuntimeInstanceKey(gear);
+
+            if (string.IsNullOrEmpty(key))
+                return true;
+
+            if (selectedRifleInstanceKeys.Contains(key))
+                return true;
+
+            if (selectedRifleInstanceKeys.Count >= 1)
+                return false;
+
+            selectedRifleInstanceKeys.Add(key);
+            return true;
+        }
+
+        private static bool ShouldReduceTool(GearItem gear, string gearName)
+        {
+            int budgetForType = GetToolBudgetForType(gearName);
+
+            if (budgetForType <= 0)
+                return false;
+
+            ResetSelectionWindowIfNeeded();
+
+            string key = PQR_Util.GetRuntimeInstanceKey(gear);
+
+            if (string.IsNullOrEmpty(key))
+                return false;
+
+            if (selectedToolInstanceKeys.Contains(key))
+                return true;
+
+            if (selectedToolInstanceKeys.Count >= 3)
+                return false;
+
+            int alreadyForType = 0;
+
+            if (selectedToolTypeCounts.ContainsKey(gearName))
+                alreadyForType = selectedToolTypeCounts[gearName];
+
+            if (alreadyForType >= budgetForType)
+                return false;
+
+            selectedToolInstanceKeys.Add(key);
+            selectedToolTypeCounts[gearName] = alreadyForType + 1;
+
+            return true;
         }
 
         public static string GetCurrentHeaviestRifleName()
@@ -426,49 +527,49 @@ namespace PermanentQuestRewards
         public static List<string> GetCurrentTopThreeToolNames()
         {
             List<string> result = new List<string>();
+            int remainingSlots = 3;
 
             foreach (string toolName in KnownWeights.TOOLS_BY_WEIGHT)
             {
-                if (InventoryHasItemCached(toolName))
-                {
+                if (!InventoryHasItemCached(toolName))
+                    continue;
+
+                for (int i = 0; i < remainingSlots; i++)
                     result.Add(toolName);
 
-                    if (result.Count >= 3)
-                        return result;
-                }
+                remainingSlots = 0;
+                break;
             }
 
             return result;
         }
 
-        private static bool IsCurrentHeaviestRifle(string gearName)
+        private static int GetToolBudgetForType(string gearName)
         {
-            string current = GetCurrentHeaviestRifleName();
+            int remainingSlots = 3;
 
-            if (string.IsNullOrEmpty(current))
-                return false;
-
-            return current == gearName;
-        }
-
-        private static bool IsCurrentTopThreeTool(string gearName)
-        {
-            List<string> tools = GetCurrentTopThreeToolNames();
-
-            foreach (string tool in tools)
+            foreach (string toolName in KnownWeights.TOOLS_BY_WEIGHT)
             {
-                if (tool == gearName)
-                    return true;
+                if (!InventoryHasItemCached(toolName))
+                    continue;
+
+                if (toolName == gearName)
+                    return remainingSlots;
+
+                remainingSlots--;
+
+                if (remainingSlots <= 0)
+                    return 0;
             }
 
-            return false;
+            return 0;
         }
 
-        private static bool InventoryHasItemCached(string gearName)
+        public static bool InventoryHasItemCached(string gearName)
         {
-            if (Time.time >= nextAllowedScanTime)
+            if (Time.time >= nextPresenceCacheClearTime)
             {
-                nextAllowedScanTime = Time.time + 0.25f;
+                nextPresenceCacheClearTime = Time.time + 0.25f;
                 inventoryPresenceCache.Clear();
             }
 
@@ -677,54 +778,27 @@ namespace PermanentQuestRewards
                     toolText += tool;
                 }
 
-                MelonLogger.Msg("[PQR-DEBUG] Top-3 erkannte Tools: " + toolText);
-                DumpRelevantInventory();
+                MelonLogger.Msg("[PQR-DEBUG] Top-3 Tool-Slots: " + toolText);
+
+                MelonLogger.Msg("[PQR-DEBUG] Rifle Presence:");
+                foreach (string rifle in KnownWeights.RIFLES_BY_WEIGHT)
+                {
+                    if (PQR_WeightLogic.InventoryHasItemCached(rifle))
+                        MelonLogger.Msg("[PQR-DEBUG]   " + rifle + " vorhanden");
+                }
+
+                MelonLogger.Msg("[PQR-DEBUG] Tool Presence:");
+                foreach (string tool in KnownWeights.TOOLS_BY_WEIGHT)
+                {
+                    if (PQR_WeightLogic.InventoryHasItemCached(tool))
+                        MelonLogger.Msg("[PQR-DEBUG]   " + tool + " vorhanden");
+                }
+
                 MelonLogger.Msg("[PQR-DEBUG] ========================================");
             }
             catch (Exception e)
             {
                 MelonLogger.Error("[PQR-DEBUG] DumpStatus Fehler: " + e);
-            }
-        }
-
-        private static void DumpRelevantInventory()
-        {
-            try
-            {
-                GearItem[] allGear = UnityEngine.Object.FindObjectsOfType<GearItem>();
-
-                if (allGear == null)
-                {
-                    MelonLogger.Msg("[PQR-DEBUG] Inventar-Dump: keine GearItems gefunden.");
-                    return;
-                }
-
-                int count = 0;
-
-                foreach (GearItem gear in allGear)
-                {
-                    if (gear == null)
-                        continue;
-
-                    if (!gear.m_InPlayerInventory)
-                        continue;
-
-                    string gearName = PQR_Util.NormalizeGearName(gear.name);
-
-                    if (!KnownWeights.RIFLES.Contains(gearName) && !KnownWeights.TOOLS.Contains(gearName))
-                        continue;
-
-                    bool reduced = PQR_WeightLogic.ShouldReduce(gear);
-
-                    MelonLogger.Msg("[PQR-DEBUG] Item: " + gearName + " | reduziert: " + reduced);
-                    count++;
-                }
-
-                MelonLogger.Msg("[PQR-DEBUG] Relevante Inventar-Items gefunden: " + count);
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Error("[PQR-DEBUG] Inventar-Dump Fehler: " + e);
             }
         }
     }
