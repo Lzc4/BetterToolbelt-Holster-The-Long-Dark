@@ -85,4 +85,4 @@ This mod is not affiliated with or endorsed by Hinterland Studio.
 
 # Download
 
-[![Download](https://img.shields.io/badge/Download-v1.6.1-blue?style=for-the-badge)](https://github.com/Lzc4/BetterToolbelt-Holster-The-Long-Dark/releases/download/v1.6.1/PermanentQuestRewards.dll)
+[![Download](https://img.shields.io/badge/Download-v1.6.1-blue?style=for-the-badge)](https://github.com/Lzc4/BetterToolbelt-Holster-The-Long-Dark/releases/download/v1.6.1(2)/PermanentQuestRewards.dll)
